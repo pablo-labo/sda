@@ -5,8 +5,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-ENV_NAME="${ENV_NAME:-specdiff_aoi}"
-PYTHON_VERSION="${PYTHON_VERSION:-3.12}"
+VENV_DIR="${VENV_DIR:-${REPO_ROOT}/.venv}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
 HF_HOME="${HF_HOME:-${REPO_ROOT}/.hf_cache}"
 HF_TOKEN="${HF_TOKEN:-}"
 TARGET_MODEL="${TARGET_MODEL:-Qwen/Qwen2.5-7B-Instruct}"
@@ -20,12 +20,11 @@ NUM_QUESTIONS="${NUM_QUESTIONS:-5}"
 MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-512}"
 SPEC_LEN="${SPEC_LEN:-8}"
 DRAFTER_THRESHOLD="${DRAFTER_THRESHOLD:-0.9}"
-CUDA_VISIBLE_DEVICES_VALUE="${CUDA_VISIBLE_DEVICES_VALUE:-0,1}"
-NUM_DRAFTERS="${NUM_DRAFTERS:-1}"
+CUDA_VISIBLE_DEVICES_VALUE="${CUDA_VISIBLE_DEVICES_VALUE:-0,1,2}"
+NUM_DRAFTERS="${NUM_DRAFTERS:-2}"
 TARGET_GPU="${TARGET_GPU:-0}"
-DRAFTER_GPUS="${DRAFTER_GPUS:-1}"
+DRAFTER_GPUS="${DRAFTER_GPUS:-1 2}"
 RUN_NAME="${RUN_NAME:-gsm8k_smoke_opt}"
-SKIP_ENV_CREATE="${SKIP_ENV_CREATE:-0}"
 SKIP_MODEL_DOWNLOAD="${SKIP_MODEL_DOWNLOAD:-0}"
 
 export HF_HOME
@@ -41,39 +40,33 @@ die() {
   exit 1
 }
 
-activate_conda() {
-  if ! command -v conda >/dev/null 2>&1; then
-    die "conda not found. Install Miniconda/Anaconda first, or rerun with SKIP_ENV_CREATE=1 and a ready Python environment."
-  fi
-
-  local conda_base
-  conda_base="$(conda info --base)"
-  # shellcheck disable=SC1091
-  source "${conda_base}/etc/profile.d/conda.sh"
-}
-
 ensure_env() {
-  activate_conda
-
-  if [[ "${SKIP_ENV_CREATE}" == "1" ]]; then
-    log "SKIP_ENV_CREATE=1, activating existing conda env ${ENV_NAME}"
-    conda activate "${ENV_NAME}" || die "failed to activate env ${ENV_NAME}"
-    return
+  if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
+    die "Python binary ${PYTHON_BIN} not found. Set PYTHON_BIN to a valid Python 3 executable."
   fi
 
-  local sanitized_env
-  sanitized_env="$(mktemp)"
-  sed '/^prefix:/d' "${REPO_ROOT}/environment.yaml" > "${sanitized_env}"
-
-  if conda env list | awk '{print $1}' | grep -qx "${ENV_NAME}"; then
-    log "Conda env ${ENV_NAME} already exists"
+  if [[ -d "${VENV_DIR}" ]]; then
+    log "Reusing existing venv at ${VENV_DIR}"
   else
-    log "Creating conda env ${ENV_NAME} from environment.yaml"
-    conda env create -n "${ENV_NAME}" -f "${sanitized_env}"
+    log "Creating venv at ${VENV_DIR}"
+    "${PYTHON_BIN}" -m venv "${VENV_DIR}"
   fi
 
-  rm -f "${sanitized_env}"
-  conda activate "${ENV_NAME}" || die "failed to activate env ${ENV_NAME}"
+  [[ -f "${VENV_DIR}/bin/activate" ]] || die "venv setup incomplete at ${VENV_DIR}: missing bin/activate"
+
+  # shellcheck disable=SC1091
+  source "${VENV_DIR}/bin/activate"
+
+  log "Upgrading pip/setuptools/wheel"
+  python -m pip install --upgrade pip setuptools wheel
+
+  log "Installing Python dependencies from environment.yaml pip section"
+  awk '
+    /^  - pip:/ { in_pip=1; next }
+    in_pip && /^      - / { sub(/^      - /, ""); print; next }
+    in_pip && $0 !~ /^      - / { in_pip=0 }
+  ' "${REPO_ROOT}/environment.yaml" > "${REPO_ROOT}/.setup_requirements.txt"
+  python -m pip install -r "${REPO_ROOT}/.setup_requirements.txt"
 }
 
 ensure_python_packages() {
@@ -94,8 +87,8 @@ ensure_gpu_visibility() {
 import torch
 count = torch.cuda.device_count()
 print(f"Visible CUDA devices: {count}")
-if count < 2:
-    raise SystemExit("Need at least 2 visible CUDA devices for the default two-GPU smoke test")
+if count < 3:
+    raise SystemExit("Need at least 3 visible CUDA devices for the default three-GPU smoke test")
 for idx in range(count):
     print(f"GPU {idx}: {torch.cuda.get_device_name(idx)}")
 PY
@@ -185,7 +178,7 @@ run_smoke_test() {
 
 main() {
   log "Repo root: ${REPO_ROOT}"
-  log "Environment name: ${ENV_NAME}"
+  log "Virtual env dir: ${VENV_DIR}"
   log "Target model dir: ${TARGET_MODEL_DIR}"
   log "Fast_dLLM dir: ${DLLM_DIR}"
 
