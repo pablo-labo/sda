@@ -20,10 +20,10 @@ NUM_QUESTIONS="${NUM_QUESTIONS:-5}"
 MAX_NEW_TOKENS="${MAX_NEW_TOKENS:-512}"
 SPEC_LEN="${SPEC_LEN:-8}"
 DRAFTER_THRESHOLD="${DRAFTER_THRESHOLD:-0.9}"
-CUDA_VISIBLE_DEVICES_VALUE="${CUDA_VISIBLE_DEVICES_VALUE:-0,1,2,3}"
-NUM_DRAFTERS="${NUM_DRAFTERS:-3}"
+CUDA_VISIBLE_DEVICES_VALUE="${CUDA_VISIBLE_DEVICES_VALUE:-0,1}"
+NUM_DRAFTERS="${NUM_DRAFTERS:-1}"
 TARGET_GPU="${TARGET_GPU:-0}"
-DRAFTER_GPUS="${DRAFTER_GPUS:-1 2 3}"
+DRAFTER_GPUS="${DRAFTER_GPUS:-1}"
 RUN_NAME="${RUN_NAME:-gsm8k_smoke_opt}"
 SKIP_ENV_CREATE="${SKIP_ENV_CREATE:-0}"
 SKIP_MODEL_DOWNLOAD="${SKIP_MODEL_DOWNLOAD:-0}"
@@ -94,8 +94,8 @@ ensure_gpu_visibility() {
 import torch
 count = torch.cuda.device_count()
 print(f"Visible CUDA devices: {count}")
-if count < 4:
-    raise SystemExit("Need at least 4 visible CUDA devices for the default multi-GPU smoke test")
+if count < 2:
+    raise SystemExit("Need at least 2 visible CUDA devices for the default two-GPU smoke test")
 for idx in range(count):
     print(f"GPU {idx}: {torch.cuda.get_device_name(idx)}")
 PY
