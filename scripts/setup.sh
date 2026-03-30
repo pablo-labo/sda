@@ -72,9 +72,9 @@ ensure_env() {
 ensure_python_packages() {
   log "Checking core Python dependencies"
   python - <<'PY'
-import importlib
+from importlib.util import find_spec
 mods = ["torch", "transformers", "datasets", "wandb", "huggingface_hub"]
-missing = [m for m in mods if importlib.util.find_spec(m) is None]
+missing = [m for m in mods if find_spec(m) is None]
 if missing:
     raise SystemExit(f"Missing Python packages: {missing}")
 print("Python package check passed")
