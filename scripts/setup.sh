@@ -28,8 +28,15 @@ RUN_NAME="${RUN_NAME:-gsm8k_smoke_opt}"
 SKIP_MODEL_DOWNLOAD="${SKIP_MODEL_DOWNLOAD:-0}"
 
 export HF_HOME
+export HF_TOKEN
 export TRANSFORMERS_CACHE="${HF_HOME}/transformers"
 export HUGGINGFACE_HUB_CACHE="${HF_HOME}/hub"
+export TARGET_MODEL
+export DLLM_MODEL
+export TARGET_MODEL_DIR
+export DLLM_DIR
+export OUTPUT_DIR
+export TIMING_OUT
 
 log() {
   printf '\n[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
